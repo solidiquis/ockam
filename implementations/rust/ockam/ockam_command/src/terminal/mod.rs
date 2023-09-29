@@ -7,6 +7,7 @@ use colorful::Colorful;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use miette::Context as _;
 use miette::{miette, IntoDiagnostic};
+use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::time::sleep;
 
@@ -17,6 +18,7 @@ use ockam_core::env::{get_env, get_env_with_default, FromString};
 use ockam_core::errcode::Kind;
 
 use crate::error::Error;
+use crate::exitcode;
 use crate::{fmt_list, fmt_log, fmt_warn, OutputFormat, Result};
 
 pub mod colors;
@@ -343,6 +345,29 @@ impl<W: TerminalWriter> Terminal<W, ToStdErr> {
             });
             writeln!(output)?;
         }
+
+        Ok(output)
+    }
+
+    pub fn build_json_list(&self, nodes: &[impl Serialize], empty_message: &str) -> Result<String> {
+        if nodes.is_empty() {
+            let output = format!("{}", &fmt_warn!("{empty_message}"));
+            return Ok(output);
+        }
+
+        let mut serialized_nodes = Vec::with_capacity(nodes.len());
+
+        for node in nodes {
+            let json_node = serde_json::to_string_pretty(node).map_err(|e| {
+                Error::InternalError {
+                    error_message: e.to_string(),
+                    exit_code: exitcode::SOFTWARE
+                }
+            })?;
+            serialized_nodes.push(json_node);
+        }
+
+        let output = serialized_nodes.join(",\n");
 
         Ok(output)
     }

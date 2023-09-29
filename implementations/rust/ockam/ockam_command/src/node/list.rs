@@ -2,6 +2,7 @@ use clap::Args;
 use colorful::Colorful;
 use indoc::formatdoc;
 use miette::Context as _;
+use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::try_join;
 
@@ -9,7 +10,7 @@ use ockam::Context;
 use ockam_api::cli_state::StateDirTrait;
 use ockam_api::nodes::models::base::NodeStatus;
 
-use crate::output::Output;
+use crate::output::{Output, OutputFormat};
 use crate::terminal::OckamColor;
 use crate::util::{api, node_rpc, Rpc};
 use crate::{docs, CommandGlobalOpts, Result};
@@ -100,13 +101,25 @@ async fn run_impl(
         ));
     }
 
-    let list = opts
-        .terminal
-        .build_list(&nodes, "Nodes", "No nodes found on this system.")?;
-    opts.terminal.stdout().plain(list).write_line()?;
+    let empty_msg = "No nodes found on this system.";
+
+    let stdout = match &opts.global_args.output_format {
+        OutputFormat::Plain => {
+            let list = opts.terminal.build_list(&nodes, "Nodes", &empty_msg)?;
+            opts.terminal.stdout().plain(list)
+        },
+        OutputFormat::Json => {
+            let list = opts.terminal.build_json_list(&nodes, &empty_msg)?;
+            opts.terminal.stdout().json(list)
+        }
+    };
+
+    stdout.write_line()?;
+
     Ok(())
 }
 
+#[derive(Serialize)]
 pub struct NodeListOutput {
     pub node_name: String,
     pub status: String,
